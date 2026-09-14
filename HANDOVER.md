@@ -509,19 +509,64 @@ web_deploy_package.zip  LockedVideoPlayer.exe  *.exe
 
 > 上面是**语义摘要**。真实文件见仓库根 `.gitignore`——那里每条 pattern 后面**不能有任何字符**（见 9.1.1）。
 
-### 9.1 GitHub 发布（状态：**未完成**）
+### 9.1 GitHub 发布（状态：**代码已推送，但旧提交仍需物理清除**）
 
-- 目标仓库：`git@github.com:Jacky-Yang123/-Locked-File-Manager-Especially-Video-Pic-Player.git`
-- SSH 认证已验证通过；远程 `master` 分支是**旧快照**（含 `.pyc`、`123.bat`、`.vscode`），需覆盖。
-- **关键约束**：本地 git 历史上存在过明文的 `library.json`（含真实路径）。单纯加 `.gitignore` **不会**清除旧提交里的内容，必须**重建历史**：
+- 仓库：`git@github.com:Jacky-Yang123/-Locked-File-Manager-Especially-Video-Pic-Player.git`（**public**，无认证可读）
+- 已完成：
+  - 重建干净历史，单次提交 `62c033e`，**82 个文件，零隐私文件**（已用 `git ls-tree -r origin/master` 复扫确认）。
+  - 旧历史保留在**本地**分支 `backup-old-history`（`f95ef8a`），**从未推送**。
+  - `master` 已强推覆盖：`+ f95ef8a...62c033e master -> master (forced update)`。
+- 重建历史用的命令：
   ```bash
-  git checkout --orphan clean-main
-  git add -A
+  git branch -f backup-old-history master      # 先本地备份，绝不推送
+  git add -A                                   # .gitignore 必须已修好（见 9.1.1）
   git commit -m "Initial commit"
-  git branch -M clean-main master
+  git branch -M clean master
   git push --force origin master
   ```
-- 推送前用 `git ls-files` 复查一遍暂存区，确认零隐私文件。
+
+#### 9.1.2 ★★ 强推**不会**清除 GitHub 上的旧提交（真实发生过）
+
+`git push --force` 只是把分支指针从 `f95ef8a` 挪到 `62c033e`。**旧提交对象仍留在 GitHub 服务器上**，并且**无需认证就能按 SHA 读取**：
+
+```bash
+# 实测（本仓库，公开无认证）
+curl -s https://raw.githubusercontent.com/<owner>/<repo>/<SHA>/library.json
+# -> HTTP 200, Content-Length: 336   ← 用户的真实路径原样返回
+curl -s -o /dev/null -w "%{http_code}" https://api.github.com/repos/<owner>/<repo>/commits/<SHA>
+# -> 200    ← 提交在 GitHub 上依然存在
+```
+
+本仓库的泄漏点：旧 `main` 分支的一个提交（message 为 `update`，**SHA 已隐去，勿写入公开文件**）内含**明文 `library.json`**（播放历史 + 真实路径 `G:\Test\...`）、`123.bat`、`.vscode/settings.json`。
+`main` 分支虽已从远程消失（`git ls-remote --heads` 只剩 `master`），但那个提交对象**没有**随之消失。
+
+> ⚠️ **不要把这个 SHA 写进任何要公开的文件**（包括本 README / HANDOVER）。
+> 知道 SHA 的人就能直接取走那份数据，等于自己二次泄密。需要时从本地对象库自查即可（脚本见下）。
+
+> **结论**：涉及隐私的仓库，`force push` + `gitignore` **都不足以回收已推送过的数据。**
+
+**唯一可靠的清除方式（按彻底程度排序）**：
+
+1. **删除仓库并重建**（推荐，几秒完成）——GitHub → 仓库 Settings → Danger Zone → *Delete this repository* → 用同名重建空仓库 → 重新 `git push -u origin master`。旧对象随仓库一起销毁。
+2. **联系 GitHub Support** 请求 purge 不可达对象（慢，但能保留 issue/star 等元数据）。
+3. 什么都不做 → 只要有人知道/拿到旧 SHA，数据就一直是公开的。
+
+> 排查自身仓库有没有这个问题：
+> ```bash
+> # 1. 列出本地对象库里所有提交，逐个查是否含隐私文件
+> git cat-file --batch-all-objects --batch-check='%(objecttype) %(objectname)' \
+>   | awk '$1=="commit"{print $2}' \
+>   | while read c; do
+>       git ls-tree -r "$c" --name-only | grep -iE "library\.json|\.evf$|\.key$|\.pem$|access\.log" \
+>         && echo "  ^^^ 泄露于 $c"
+>     done
+> # 2. 对可疑 SHA 做无认证访问测试
+> curl -s -o /dev/null -w "%{http_code}\n" \
+>   "https://raw.githubusercontent.com/<owner>/<repo>/<SHA>/library.json"
+> ```
+
+- 推送前务必用 `git ls-tree -r HEAD --name-only` 复查，确认零隐私文件。
+- GitHub 仓库描述（About）已被设为项目简介，仓库名 `-Locked-File-Manager-Especially-Video-Pic-Player` 带**前导连字符**，观感不佳；本机**未安装 `gh` CLI**，改仓库名需要 GitHub 网页端操作或提供 token 走 API。
 
 #### 9.1.1 ★★ 血泪教训：`.gitignore` **不支持行尾注释**
 
@@ -574,6 +619,8 @@ done
 | 5 | 路径穿越 | `_get_local_path` 无根目录包含性校验 | `realpath` + `_within_root()`；`_resolve_safe_path` 同步加固（分隔符感知） |
 | 6 | `web/requirements.txt` 无法 `pip install` | 末尾两行被写成 UTF-16LE | 重写为纯 ASCII |
 | 7 | `.gitignore` 六条隐私规则**静默失效** | 用了 git 不支持的**行尾注释**写法 | 重写为「注释独占一行」；`git check-ignore` 逐条验证 17/17 忽略、9/9 保留 |
+| 8 | repo 已发布，但旧提交里明文 `library.json` 仍可被无认证读取 | `force push` 不清除 GitHub 服务器上的旧对象 | 干净历史已推送（82 文件/零隐私）；**遗留动作见 9.1.2：需删除并重建仓库** |
+| 9 | 公开 README 严重过时（只讲 v2.0.0，未提 web/、HTTPS 共享、`.evf` 格式） | 从未随迭代更新 | 重写为双语公开版，含格式规范、三端架构、安全模型与自测说明 |
 
 **验证：`_dav_selftest.py` → 31/31 passed（2026-09-14 实测）**，含 ffprobe 端到端与 moov-at-end 场景。
 
@@ -582,9 +629,10 @@ done
 - **ES 文件浏览器 + VR 头显真机复验**：自动化测试已覆盖协议层，但客户端怪癖只能真机确认（尤其 ES 对 `<D:getcontentlength>` 的容错、4XVR 的 seek 行为、中文/空格文件名的 URL 编码）。
 - **PyInstaller 长路径**：确认冻结 exe 的 manifest 是否声明 `longPathAware`；若否，`utils/win_paths.py` 的 `\\?\` 兜底就是主力保障。
 - **`web/services/stream_service.py` 的 Range 实现**仍是独立副本，建议后续与 `utils/range_utils.py` 语义对齐（需先解决跨子项目 import）。
-- **版本号不一致**：`utils/constants.APP_VERSION = "2.0.0"`、根 `README.md` 写的是 v2.0.0，但产品实际已迭代到 v3.5.x 一线。README 内容也还没提 `web/` 子项目、HTTPS 共享、本地路径模式，**建议重写 README**。
+- **版本号不一致**：`utils/constants.APP_VERSION = "2.0.0"`（代码权威值），但用户对外的发布号已到 v3.5.x 一线。若要让二者一致，改 `utils/constants.py` 即可（`ui/main_window.py` 的标题栏与 About 都读它）。README 已重写（双语，含格式规范与三端架构）。
+- **GitHub 旧提交待物理清除**：代码已发布（master = `62c033e`，82 文件零隐私），但旧 `main` 提交（SHA 已隐去）里的明文 `library.json` 仍可被无认证读取 —— **必须删除并重建仓库**，详见 9.1.2。这是当前唯一的未闭环隐私项。
 - **PC 客户端缺双击启动脚本**：目前只有 `web/run_server.bat`，根目录没有 `start.bat`。用户的硬性偏好是 GUI 桌面项目**必须**附双击即用脚本（内容纯 ASCII），建议补一个。
-- **GitHub 发布未完成**：见 9.1。
+- **GitHub 仓库名**：`-Locked-File-Manager-Especially-Video-Pic-Player` 带前导连字符，建议在删除重建时顺手改成不带连字符的名字。本机无 `gh` CLI，需网页端操作或提供 token。
 - **WebDAV 写操作**：目前只有 `DELETE`；`MKCOL / MOVE / COPY / PROPPATCH` 未实现（定位是只读浏览 + 删除）。
 - **`/api/unlock` 与 `/api/try_cached`**：共享端遗留的 POST 端点，实际依赖 `StreamingDecryptor` 会话缓存逻辑，重构时注意别把 PC 端播放链路带崩。
 
