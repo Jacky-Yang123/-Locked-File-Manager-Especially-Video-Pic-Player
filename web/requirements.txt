@@ -1,0 +1,10 @@
+flask>=3.0
+flask-cors
+pyjwt
+bcrypt
+pycryptodome
+argon2-cffi
+requests
+opencv-python-headless
+PyMuPDF
+smbprotocol

@@ -1,0 +1,8 @@
+PyQt6
+PyQt6-WebEngine
+PyOpenGL
+opencv-python
+pycryptodome
+argon2-cffi
+pathlib
+pymupdf

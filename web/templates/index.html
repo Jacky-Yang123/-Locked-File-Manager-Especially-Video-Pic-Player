@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a0f">
+    <title>🔒 加密视频播放器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ v }}">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Page -->
+        <div id="page-auth" class="page active">
+            <div class="auth-container">
+                <div class="auth-logo">
+                    <div class="logo-icon">🔒</div>
+                    <h1>加密视频播放器</h1>
+                    <p class="auth-subtitle">NAS Web Edition</p>
+                </div>
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">登录</button>
+                    <button class="auth-tab" data-tab="register">注册</button>
+                </div>
+                <form id="form-login" class="auth-form active">
+                    <div class="input-group">
+                        <input type="text" id="login-username" placeholder="用户名" autocomplete="username" required>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="login-password" placeholder="密码" autocomplete="current-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">登 录</button>
+                    <p id="login-error" class="error-msg"></p>
+                </form>
+                <form id="form-register" class="auth-form">
+                    <div class="input-group">
+                        <input type="text" id="reg-username" placeholder="用户名（至少2字符）" autocomplete="username" required>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="reg-password" placeholder="密码（至少4字符）" autocomplete="new-password" required>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="reg-password2" placeholder="确认密码" autocomplete="new-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">注 册</button>
+                    <p id="reg-error" class="error-msg"></p>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Page (Files) -->
+        <div id="page-main" class="page">
+            <header class="top-bar">
+                <button id="btn-back" class="icon-btn icon-btn-lg hidden" title="返回上一级">‹</button>
+                <div id="breadcrumbs" class="breadcrumbs">
+                    <span class="crumb active" data-path="/">🏠 文件库</span>
+                </div>
+                <div class="top-actions">
+                    <button id="btn-password" class="icon-btn" title="输入加密密码">🔑</button>
+                    <span id="user-badge" class="user-badge"></span>
+                </div>
+            </header>
+
+            <!-- Filter & Sort Bar -->
+            <div class="filter-bar">
+                <div class="search-row">
+                    <input type="text" id="search-input" placeholder="🔍 搜索文件名...">
+                    <button id="btn-flat-mode" class="btn-flat-toggle" title="穿透所有子文件夹列出全部文件">🌐 穿透子目录</button>
+                </div>
+                <div class="filter-controls">
+                    <select id="filter-type">
+                        <option value="all">全部类型</option>
+                        <option value="video">🎬 视频文件</option>
+                        <option value="image">🖼️ 图片文件</option>
+                        <option value="doc">📄 文档/PDF</option>
+                        <option value="text">📝 文本文件</option>
+                        <option value="encrypted">🔒 加密文件</option>
+                        <option value="archive">📦 压缩包/其他</option>
+                    </select>
+                    <select id="sort-by">
+                        <option value="name">按名称</option>
+                        <option value="time">按时间</option>
+                        <option value="size">按大小</option>
+                    </select>
+                    <button id="btn-sort-order" class="icon-btn-sm" title="切换升降序">⬇️</button>
+                </div>
+            </div>
+
+            <div id="file-list" class="file-grid">
+                <!-- Files rendered by JS -->
+            </div>
+
+            <div id="empty-state" class="empty-state hidden">
+                <div class="empty-icon">📂</div>
+                <p>还没有文件</p>
+                <p class="hint">请先在设置中配置 WebDAV 地址</p>
+                <div id="scan-progress-container" class="scan-progress-container hidden">
+                    <div class="scan-progress-bar">
+                        <div id="scan-progress-fill" class="scan-progress-fill"></div>
+                    </div>
+                    <p id="scan-progress-text" class="scan-progress-text"></p>
+                    <p id="scan-progress-path" class="scan-progress-path"></p>
+                </div>
+            </div>
+
+            <div id="loading-state" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+
+            <!-- Bottom Nav -->
+            <nav class="bottom-nav">
+                <button class="nav-item active" data-page="main">
+                    <span class="nav-icon">📁</span>
+                    <span class="nav-label">文件</span>
+                </button>
+                <button class="nav-item" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">设置</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="page-settings" class="page">
+            <header class="top-bar">
+                <h2>设置</h2>
+                <div class="top-actions">
+                    <span id="settings-user-badge" class="user-badge"></span>
+                </div>
+            </header>
+
+            <div class="settings-content">
+                <div class="settings-section">
+                    <h3>📡 存储来源</h3>
+                    <div class="input-group">
+                        <label>存储类型</label>
+                        <select id="set-storage-type">
+                            <option value="nas">NAS (WebDAV / SMB)</option>
+                            <option value="local">本机文件夹 (加密视频目录)</option>
+                        </select>
+                    </div>
+                    <div id="storage-nas-fields">
+                        <div class="input-group">
+                            <label>存储地址</label>
+                            <input type="url" id="set-webdav-url" placeholder="http:// 或 \\192.168.x.x\share\">
+                        </div>
+                        <div class="input-group">
+                            <label>用户名</label>
+                            <input type="text" id="set-webdav-user" placeholder="连接用户名" autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label>密码</label>
+                            <input type="password" id="set-webdav-pass" placeholder="连接密码" autocomplete="off">
+                        </div>
+                    </div>
+                    <div id="storage-local-fields" class="hidden">
+                        <div class="input-group">
+                            <label>本地加密视频目录</label>
+                            <input type="text" id="set-local-path" placeholder="例如 G:\WARNING 或 D:\videos">
+                        </div>
+                        <p class="field-hint">填写本机存放 .evf 加密视频的文件夹路径，Web 服务直接读取，无需 NAS。</p>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btn-test-webdav" class="btn-secondary">🔗 测试连接</button>
+                        <button id="btn-save-settings" class="btn-primary">💾 保存</button>
+                    </div>
+                    <p id="settings-status" class="status-msg"></p>
+                </div>
+
+                <div class="settings-section">
+                    <h3>👤 账户修改</h3>
+                    <div class="input-group">
+                        <label>新用户名</label>
+                        <input type="text" id="set-account-user" placeholder="留空不修改" autocomplete="off">
+                    </div>
+                    <div class="input-group">
+                        <label>新密码</label>
+                        <input type="password" id="set-account-pass" placeholder="留空不修改" autocomplete="off">
+                    </div>
+                    <div class="btn-row">
+                        <button id="btn-save-account" class="btn-primary">💾 保存账户</button>
+                        <button id="btn-logout" class="btn-danger">退出登录</button>
+                    </div>
+                    <p id="account-status" class="status-msg"></p>
+                </div>
+
+                <div class="settings-section">
+                    <h3>ℹ️ 关于</h3>
+                    <p class="about-text">Locked Video Player Web Edition v1.0</p>
+                    <p class="about-text">加密视频安全播放，局域网 NAS 专用。</p>
+                </div>
+            </div>
+
+            <nav class="bottom-nav">
+                <button class="nav-item" data-page="main">
+                    <span class="nav-icon">📁</span>
+                    <span class="nav-label">文件</span>
+                </button>
+                <button class="nav-item active" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">设置</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Video Player Overlay -->
+        <div id="player-overlay" class="player-overlay hidden">
+            <div class="player-top-bar">
+                <button id="player-close" class="icon-btn icon-btn-lg" title="关闭退出">✕</button>
+                <span id="player-title" class="player-title">视频名称</span>
+                <div class="player-top-spacer"></div>
+            </div>
+
+            <div class="player-container">
+                <video id="video-element" playsinline></video>
+            </div>
+
+            <div class="player-controls">
+                <div class="progress-container">
+                    <input type="range" id="progress-bar" class="progress-bar" min="0" max="1000" value="0">
+                    <div class="time-display">
+                        <span id="time-current">00:00</span>
+                        <span id="time-total">00:00</span>
+                    </div>
+                </div>
+                <div class="control-buttons">
+                    <button id="btn-download" class="ctrl-btn" title="下载视频文件">📥</button>
+                    <button id="btn-prev" class="ctrl-btn" title="上一个">⏮</button>
+                    <button id="btn-rewind" class="ctrl-btn" title="快退10秒">⏪</button>
+                    <button id="btn-play" class="ctrl-btn play-btn" title="播放/暂停">▶</button>
+                    <button id="btn-forward" class="ctrl-btn" title="快进10秒">⏩</button>
+                    <button id="btn-next" class="ctrl-btn" title="下一个">⏭</button>
+                    <button id="btn-fullscreen" class="ctrl-btn" title="全屏">⛶</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Universal Viewer Overlay (image / pdf / text) -->
+        <div id="viewer-overlay" class="viewer-overlay hidden">
+            <div class="viewer-top-bar">
+                <button id="viewer-close" class="icon-btn icon-btn-lg" title="关闭退出">✕</button>
+                <span id="viewer-title" class="viewer-title">文件预览</span>
+                <span id="viewer-page-info" class="viewer-page-info hidden">1 / ?</span>
+                <div class="viewer-controls-group">
+                    <button id="viewer-download" class="ctrl-btn" title="下载文件">📥</button>
+                    <button id="viewer-prev-image" class="ctrl-btn hidden" title="上一张图片">⏪</button>
+                    <button id="viewer-next-image" class="ctrl-btn hidden" title="下一张图片">⏩</button>
+                    <button id="viewer-mode-toggle" class="ctrl-btn hidden" title="切换翻页/滑动模式">📄</button>
+                    <button id="viewer-zoom-out" class="ctrl-btn hidden" title="缩小">➖</button>
+                    <button id="viewer-zoom-in" class="ctrl-btn hidden" title="放大">➕</button>
+                    <button id="viewer-prev-page" class="ctrl-btn hidden" title="上一页">◀</button>
+                    <button id="viewer-next-page" class="ctrl-btn hidden" title="下一页">▶</button>
+                </div>
+            </div>
+            <div id="viewer-content" class="viewer-content"></div>
+        </div>
+
+        <!-- Download Choice Dialog -->
+        <div id="download-choice-dialog" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h3 id="dl-choice-title">📥 下载文件</h3>
+                <p class="modal-hint">选择您要下载的文件格式：</p>
+                <div class="file-action-buttons">
+                    <button id="btn-choice-dl-dec" class="btn-primary">🔓 下载解密原文件</button>
+                    <button id="btn-choice-dl-enc" class="btn-secondary">🔒 下载加密文件 (.evf)</button>
+                    <button id="btn-choice-cancel" class="btn-secondary">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Bottom-Right Progress Widget -->
+        <div id="floating-progress" class="floating-progress hidden">
+            <div class="progress-info">
+                <span id="progress-icon" class="spin-icon">⏳</span>
+                <div class="progress-text-col">
+                    <span id="progress-title">正在处理...</span>
+                    <span id="progress-detail">0 / 0</span>
+                </div>
+                <button id="progress-dismiss" class="progress-dismiss-btn" title="后台继续">✕</button>
+            </div>
+            <div class="progress-track">
+                <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Password Dialog -->
+        <div id="password-dialog" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h3>🔑 输入加密密码</h3>
+                <p class="modal-hint" id="pwd-hint">输入密码以查看缩略图和播放视频</p>
+                <div class="input-group">
+                    <input type="password" id="evf-password" placeholder="加密密码" autocomplete="off">
+                </div>
+                <div class="btn-row">
+                    <button id="pwd-cancel" class="btn-secondary">取消</button>
+                    <button id="pwd-confirm" class="btn-primary">确定</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading overlay for file downloads -->
+        <div id="download-overlay" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="spinner"></div>
+                <p id="download-status">正在缓存文件...</p>
+                <div class="progress-bar-container">
+                    <div id="download-progress" class="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="/static/js/api.js?v={{ v }}"></script>
+    <script src="/static/js/auth.js?v={{ v }}"></script>
+    <script src="/static/js/player.js?v={{ v }}"></script>
+    <script src="/static/js/viewer.js?v={{ v }}"></script>
+    <script src="/static/js/app.js?v={{ v }}"></script>
+</body>
+</html>
